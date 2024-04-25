@@ -1,4 +1,4 @@
-import { TicTacToe as Model } from "../models/tic_tac_toe/tic_tac_toe.js";
+import { TicTacToe as Model } from "../models/tic_tac_toe.js";
 import { PLAY_TIME_MILLISECONDS, PLAY_TIME_SECONDS } from "../config.js";
 
 export class TicTacToeController {

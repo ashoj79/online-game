@@ -1,4 +1,4 @@
-import { Mench as Model } from "../models/mench/mench.js";
+import { Mench as Model } from "../models/mench.js";
 import { PLAY_TIME_MILLISECONDS, PLAY_TIME_SECONDS } from "../config.js";
 
 export class MenchController {
