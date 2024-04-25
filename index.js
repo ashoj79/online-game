@@ -365,8 +365,9 @@ io.of(snakesAndLadersNamespace).on("connection", (socket) => {
     socket.on('move', async ({ dest }) => {
         const user = await user_controller.getUser({ socket_id: socket.id })
         const opponents_socket_id = await snakes_and_laders_controller.getOpponentSocketId(user)
+        const shift = await snakes_and_laders_controller.getUserShift(user)
         for (let socket_id of opponents_socket_id) {
-            io.of(snakesAndLadersNamespace).to(socket_id).emit("move", { dest });
+            io.of(snakesAndLadersNamespace).to(socket_id).emit("move", { dest, shift });
         }
     });
 
