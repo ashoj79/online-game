@@ -20,7 +20,7 @@ const menchSchema = new Schema({
     },
     game_state: {
         type: [Number],
-        default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        default: [-1, -1, -1, -1],
     },
     shifts: {
         type: [String]
@@ -31,4 +31,4 @@ const menchSchema = new Schema({
     }
 });
 
-export let Mench = mongoose.model("mench", menchSchema);
+export let SnakesAndLaders = mongoose.model("snakes_and_laders", menchSchema);

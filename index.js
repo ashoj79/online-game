@@ -8,7 +8,8 @@ import { TicTacToeController } from "./controllers/tic_tac_toe_controller.js";
 import { SecretGameController } from "./controllers/secret_game_controller.js";
 import { MenchController } from "./controllers/mench_controller.js";
 import { UserController } from "./controllers/user_controller.js";
-import { MENCH_GAME_TYPE, TIC_TAC_TOE_GAME_TYPE } from "./config.js";
+import { SnakesAndLadersController } from './controllers/snakes_and_laders_controller.js'
+import { MENCH_GAME_TYPE, SNAKES_AND_LADERS_GAME_TYPE, TIC_TAC_TOE_GAME_TYPE } from "./config.js";
 import multer from "multer";
 
 const port = process.env.PORT || 6000;
@@ -26,9 +27,11 @@ const tic_tac_toe_controller = new TicTacToeController();
 const mench_controller = new MenchController();
 const secret_game_controller = new SecretGameController();
 const user_controller = new UserController();
+const snakes_and_laders_controller = new SnakesAndLadersController()
 
-const ticTacToeNamespace = '/tictactoe';
-const menchNamespace = '/mench';
+const ticTacToeNamespace = '/tictactoe'
+const menchNamespace = '/mench'
+const snakesAndLadersNamespace = '/snakes_and_laders'
 
 await mongoose.connect("mongodb://127.0.0.1:27017/online_game");
 mongoose.connection.once("open", () => {});
@@ -195,7 +198,7 @@ io.of(menchNamespace).on("connection", (socket) => {
                 io.of(menchNamespace).to(game_data.game_id).emit('start_game', game_data.data)
             }
         } else {
-            sendPlayersInfo(data.users, data.players_count, data.socket_ids)
+            sendPlayersInfo(data.users, data.players_count, data.socket_ids, menchNamespace)
         }
     })
 
@@ -268,7 +271,121 @@ io.of(menchNamespace).on("connection", (socket) => {
         } else {
             result = await secret_game_controller.delete(user)
             if (result) {
-                sendPlayersInfo(result.users, result.players_count, result.socket_ids)
+                sendPlayersInfo(result.users, result.players_count, result.socket_ids, menchNamespace)
+            }
+        }
+    });
+});
+
+
+io.of(snakesAndLadersNamespace).on("connection", (socket) => {
+    socket.on('set_me_online', async ({token}) => {
+        await user_controller.setUserOnline(token, socket.id)
+        socket.emit('your_are_online')
+    })
+
+    socket.on('create_group', async ({players_count}) => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const invite_code = await secret_game_controller.create(user, SNAKES_AND_LADERS_GAME_TYPE, players_count)
+        if (invite_code) {
+            let users = await secret_game_controller.getGroupPlayers(invite_code)
+            socket.emit('start_game', {
+                invite_code,
+                users_info: users,
+                is_started: false,
+                users_count: players_count
+            })
+        }
+    })
+
+    socket.on('join_to_group', async ({code}) => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const data = await secret_game_controller.join(user, SNAKES_AND_LADERS_GAME_TYPE, code)
+        if (!data) {
+            socket.emit('group_not_found')
+        } else if (data.start) {
+            const game_data = await snakes_and_laders_controller.createSecretGame(data)
+            if (game_data) {
+                for (let client of data.users) {
+                    io.of(snakesAndLadersNamespace).sockets.get(client.socket_id).join(game_data.game_id)
+                }
+                io.of(snakesAndLadersNamespace).to(game_data.game_id).emit('start_game', game_data.data)
+            }
+        } else {
+            sendPlayersInfo(data.users, data.players_count, data.socket_ids, snakesAndLadersNamespace)
+        }
+    })
+
+    socket.on("join_to_game", async ({ players_count }) => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const data = await snakes_and_laders_controller.createGameOrJoin(user, players_count);
+        if (data) {
+            socket.join(data.game_id);
+            if (data.send_to_group) {
+                io.of(snakesAndLadersNamespace).to(data.game_id).emit("start_game", data.data);
+            } else {
+                socket.emit("start_game", data.data);
+            }
+        }
+    });
+
+    socket.on("check_time", async () => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const result = await snakes_and_laders_controller.checkGameTime(user);
+        if (result)
+            io.of(snakesAndLadersNamespace).to(result.game_id).emit("change_shift", result.data);
+    });
+
+    socket.on("do_game", async ({ dest }) => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const data = await snakes_and_laders_controller.doGame(user, dest);
+        if (data) 
+            io.of(snakesAndLadersNamespace).to(data.game_id).emit("update_game", data.data);
+    });
+
+    socket.on('roll_dice', async ({dice})=>{
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const socket_ids = await snakes_and_laders_controller.getOpponentSocketId(user)
+        for (let socket_id of socket_ids) {
+            io.of(snakesAndLadersNamespace).to(socket_id).emit('roll_dice', dice)
+        }
+    })
+
+    socket.on("send_message", async ({ message_id }) => {
+        if (message_id >= 1 && message_id <= 25) {
+            const user = await user_controller.getUser({ socket_id: socket.id })
+            const socket_ids = await snakes_and_laders_controller.getOpponentSocketId(user);
+            const shift = await snakes_and_laders_controller.getUserShift(user)
+            for (let socket_id of socket_ids) {
+                io.of(snakesAndLadersNamespace).to(socket_id).emit("mench_message", {message_id, shift});
+            }
+        }
+    });
+
+    socket.on('move', async ({ dest }) => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const opponents_socket_id = await snakes_and_laders_controller.getOpponentSocketId(user)
+        for (let socket_id of opponents_socket_id) {
+            io.of(snakesAndLadersNamespace).to(socket_id).emit("move", { dest });
+        }
+    });
+
+    socket.on("left", async () => {
+        const user = await user_controller.getUser({ socket_id: socket.id })
+        const data = await snakes_and_laders_controller.leftUser(user);
+        if (data) 
+            io.of(snakesAndLadersNamespace).to(data.game_id).emit("left_opponent", data.data);
+    });
+
+    socket.on("disconnect", async () => {
+        const user = await user_controller.setUserOffline(socket.id)
+        let result = await snakes_and_laders_controller.disconnectUser(user);
+        if (result) {
+            io.of(snakesAndLadersNamespace).to(result.game_id).emit("start_game", result.data);
+        } else {
+            result = await secret_game_controller.delete(user)
+            if (result) {
+                sendPlayersInfo(result.users, result.players_count, result.socket_ids, snakesAndLadersNamespace)
             }
         }
     });
@@ -308,9 +425,9 @@ http_server.listen(port, () => {
 //     }
 // }, 10000);
 
-function sendPlayersInfo(users, users_count, socket_ids){
+function sendPlayersInfo(users, users_count, socket_ids, namespace){
     for (let socket_id of socket_ids) {
-        io.of(menchNamespace).to(socket_id).emit('start_game', {
+        io.of(namespace).to(socket_id).emit('start_game', {
             is_started: false,
             users_info: users,
             users_count

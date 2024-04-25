@@ -1,7 +1,7 @@
-import { Mench as Model } from "../models/mench.js";
+import { SnakesAndLaders as Model } from "../models/snakes_and_laders.js";
 import { PLAY_TIME_MILLISECONDS, PLAY_TIME_SECONDS } from "../config.js";
 
-export class MenchController {
+export class SnakesAndLadersController {
     async createGameOrJoin(user, users_count) {
         var game = await this.#getUserGame(user);
         if (game !== null) {
@@ -208,13 +208,12 @@ export class MenchController {
         return data;
     }
 
-    async doGame(user, moves) {
+    async doGame(user, dest) {
         const game = await Model.findOne({ users: user }).populate('users');
         if (game === null) return false
 
         if (game.current_user != user._id.toString()) return false
 
-        let user_shift = -1
         let user_index = -1
         for (let i = 0; i < game.users.length; i++) {
             if (game.users[i].username == user.username) {
@@ -222,51 +221,9 @@ export class MenchController {
             }
         }
 
-        for (let i = 0; i < game.shifts.length; i++) {
-            if (game.shifts[i] == user.username) {
-                user_shift = i + 1
-            }
-        }
+        game.game_state[user_index] = dest
 
-        const user_pieces = []
-        if (user_shift == 1) {
-            user_pieces.push(1, 2, 3, 4)
-        } else if (user_shift == 2) {
-            user_pieces.push(5, 6, 7, 8)
-        } else if (user_shift == 3) {
-            user_pieces.push(9, 10, 11, 12)
-        } else if (user_shift == 4) {
-            user_pieces.push(13, 14, 15, 16)
-        } else {
-            return false;
-        }
-
-        for (let move of moves) {
-            if (move.from < -1 || move.from > 64 || move.to < -1 || move.to > 64) {
-                return false;
-            }
-            if (move.from == -1) {
-                if ((user_shift == 1 && move.to != 42) || (user_shift == 2 && move.to != 20) || (user_shift == 3 && move.to != 9) || (user_shift == 4 && move.to != 31)) {
-                    return false;
-                }
-            } else if (move.to > -1 && game.game_state[move.from] != move.piece_number) {
-                return false;
-            }
-
-            if (move.to > -1) {
-                if (user_pieces.includes(game.game_state[move.to])) {
-                    return false;
-                }
-
-                game.game_state[move.to] = move.piece_number
-            } 
-
-            if (move.from > -1 && move.to > -1) {
-                game.game_state[move.from] = 0
-            }
-        }
-
-        const is_win = this.#isUserWin(game.game_state, user_shift)
+        const is_win = dest == 99
         let winners = [];
         let end = false
 
@@ -368,14 +325,6 @@ export class MenchController {
         if (current_index + 1 == game.users.length) return 0
 
         return current_index + 1
-    }
-
-    #isUserWin(state, user_index) {
-        if (user_index == 1 && state[44] > 0 && state[45] > 0 && state[46] > 0 && state[47] > 0) return true;
-        if (user_index == 2 && state[48] > 0 && state[49] > 0 && state[50] > 0 && state[51] > 0) return true;
-        if (user_index == 3 && state[52] > 0 && state[53] > 0 && state[54] > 0 && state[55] > 0) return true;
-        if (user_index == 4 && state[56] > 0 && state[57] > 0 && state[58] > 0 && state[59] > 0) return true;
-        return false
     }
 
     #getCurrentShift(game) {
