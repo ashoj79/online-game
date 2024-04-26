@@ -346,8 +346,9 @@ io.of(snakesAndLadersNamespace).on("connection", (socket) => {
     socket.on('roll_dice', async ({dice})=>{
         const user = await user_controller.getUser({ socket_id: socket.id })
         const socket_ids = await snakes_and_laders_controller.getOpponentSocketId(user)
+        const shift = await snakes_and_laders_controller.getUserShift(user)
         for (let socket_id of socket_ids) {
-            io.of(snakesAndLadersNamespace).to(socket_id).emit('roll_dice', dice)
+            io.of(snakesAndLadersNamespace).to(socket_id).emit('roll_dice', { dice, shift })
         }
     })
 
